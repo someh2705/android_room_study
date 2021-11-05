@@ -2,9 +2,7 @@ package com.study.roomwordstudy
 
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
-import androidx.room.ColumnInfo
-import androidx.room.Entity
-import androidx.room.PrimaryKey
+import androidx.room.*
 
 class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -15,3 +13,16 @@ class MainActivity : AppCompatActivity() {
 
 @Entity(tableName = "word_table")
 data class Word(@PrimaryKey(autoGenerate = true) @ColumnInfo(name = "word") val word: String)
+
+@Dao
+interface WordDao {
+
+    @Query("SELECT * FROM word_table ORDER BY word ASC")
+    fun getAlphabetizedWords(): List<Word>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insert(word: Word)
+
+    @Query("DELETE FROM word_table")
+    suspend fun deleteAll()
+}
