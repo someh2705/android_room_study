@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">RoomWordStudy</string>
+    <string name="add_word">더하기</string>
 </resources>
