@@ -4,8 +4,11 @@ import android.content.Context
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import androidx.annotation.WorkerThread
+import androidx.lifecycle.*
 import androidx.room.*
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.launch
+import java.lang.IllegalArgumentException
 
 class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -61,5 +64,23 @@ class WordRepository(private val wordDao: WordDao) {
     @WorkerThread
     suspend fun insert(word: Word) {
         wordDao.insert(word)
+    }
+}
+
+class WordViewModel(private val repository: WordRepository): ViewModel(){
+    val allWords: LiveData<List<Word>> = repository.allWords.asLiveData()
+
+    fun insert(word: Word) = viewModelScope.launch {
+        repository.insert(word)
+    }
+}
+
+class WordViewModelFactory(private val repository: WordRepository): ViewModelProvider.Factory {
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        if (modelClass.isAssignableFrom(WordViewModel::class.java)){
+            @Suppress("UNCHECKED_CAST")
+            return WordViewModel(repository) as T
+        }
+        throw IllegalArgumentException("Unknown ViewModel class")
     }
 }
