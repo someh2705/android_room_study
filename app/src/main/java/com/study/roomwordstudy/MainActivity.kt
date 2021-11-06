@@ -1,5 +1,6 @@
 package com.study.roomwordstudy
 
+import android.app.Application
 import android.content.Context
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
@@ -137,4 +138,9 @@ class WordListAdapter : ListAdapter<Word, WordListAdapter.WordViewHolder>(WordsC
         val current = getItem(position)
         holder.bind(current.word)
     }
+}
+
+class WordsApplication: Application() {
+    val database by lazy { WordRoomDatabase.getDatabase(this) }
+    val repository by lazy { WordRepository(database.wordDao()) }
 }
