@@ -1,12 +1,16 @@
 package com.study.roomwordstudy
 
+import android.app.Activity
 import android.app.Application
 import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
+import android.widget.Toast
+import androidx.activity.viewModels
 import androidx.annotation.WorkerThread
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.*
@@ -16,12 +20,18 @@ import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import androidx.room.*
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.google.android.material.floatingactionbutton.FloatingActionButton
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
+    private val newWordActivityRequestCode = 1
+    private val wordViewModel: WordViewModel by viewModels {
+        WordViewModelFactory((application as WordsApplication).repository)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -31,6 +41,33 @@ class MainActivity : AppCompatActivity() {
 
         recyclerView.adapter = adapter
         recyclerView.layoutManager = LinearLayoutManager(this)
+
+        wordViewModel.allWords.observe(this, Observer { words ->
+            words?.let { adapter.submitList(it) }
+        })
+
+        val fab = findViewById<FloatingActionButton>(R.id.fab)
+        fab.setOnClickListener {
+            val intent = Intent(this@MainActivity, NewWordActivity::class.java)
+            startActivityForResult(intent, newWordActivityRequestCode)
+        }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+
+        if (requestCode == newWordActivityRequestCode && resultCode == Activity.RESULT_OK) {
+            data?.getStringExtra(NewWordActivity.EXTRA_REPLY)?.let {
+                val word = Word(it)
+                wordViewModel.insert(word)
+            }
+        } else {
+            Toast.makeText(
+                applicationContext,
+                R.string.empty_not_saved,
+                Toast.LENGTH_LONG
+            ).show()
+        }
     }
 }
 
@@ -51,7 +88,7 @@ interface WordDao {
 }
 
 @Database(entities = arrayOf(Word::class), version = 1, exportSchema = false)
-abstract class WordRoomDatabase: RoomDatabase() {
+abstract class WordRoomDatabase : RoomDatabase() {
     abstract fun wordDao(): WordDao
 
     companion object {
@@ -73,7 +110,8 @@ abstract class WordRoomDatabase: RoomDatabase() {
         }
     }
 
-    private class WordDatabaseCallback(private val scope: CoroutineScope) : RoomDatabase.Callback() {
+    private class WordDatabaseCallback(private val scope: CoroutineScope) :
+        RoomDatabase.Callback() {
         override fun onCreate(db: SupportSQLiteDatabase) {
             super.onCreate(db)
             INSTANCE?.let { database ->
@@ -104,7 +142,7 @@ class WordRepository(private val wordDao: WordDao) {
     }
 }
 
-class WordViewModel(private val repository: WordRepository): ViewModel(){
+class WordViewModel(private val repository: WordRepository) : ViewModel() {
     val allWords: LiveData<List<Word>> = repository.allWords.asLiveData()
 
     fun insert(word: Word) = viewModelScope.launch {
@@ -112,9 +150,9 @@ class WordViewModel(private val repository: WordRepository): ViewModel(){
     }
 }
 
-class WordViewModelFactory(private val repository: WordRepository): ViewModelProvider.Factory {
+class WordViewModelFactory(private val repository: WordRepository) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        if (modelClass.isAssignableFrom(WordViewModel::class.java)){
+        if (modelClass.isAssignableFrom(WordViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
             return WordViewModel(repository) as T
         }
@@ -161,8 +199,8 @@ class WordListAdapter : ListAdapter<Word, WordListAdapter.WordViewHolder>(WordsC
     }
 }
 
-class WordsApplication: Application() {
-    val applicationScope =  CoroutineScope(SupervisorJob())
+class WordsApplication : Application() {
+    val applicationScope = CoroutineScope(SupervisorJob())
 
     val database by lazy { WordRoomDatabase.getDatabase(this, applicationScope) }
     val repository by lazy { WordRepository(database.wordDao()) }
