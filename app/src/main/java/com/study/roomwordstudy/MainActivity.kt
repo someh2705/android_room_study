@@ -2,23 +2,24 @@ package com.study.roomwordstudy
 
 import android.app.Application
 import android.content.Context
-import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
-import android.text.Layout
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import androidx.annotation.WorkerThread
+import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.*
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import androidx.room.*
+import androidx.sqlite.db.SupportSQLiteDatabase
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
-import java.lang.IllegalArgumentException
 
 class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -57,18 +58,38 @@ abstract class WordRoomDatabase: RoomDatabase() {
         @Volatile
         private var INSTANCE: WordRoomDatabase? = null
 
-        fun getDatabase(context: Context): WordRoomDatabase {
+        fun getDatabase(context: Context, scope: CoroutineScope): WordRoomDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     WordRoomDatabase::class.java,
                     "word_database"
-                ).build()
+                ).addCallback(WordDatabaseCallback(scope)).build()
 
                 INSTANCE = instance
 
                 instance
             }
+        }
+    }
+
+    private class WordDatabaseCallback(private val scope: CoroutineScope) : RoomDatabase.Callback() {
+        override fun onCreate(db: SupportSQLiteDatabase) {
+            super.onCreate(db)
+            INSTANCE?.let { database ->
+                scope.launch {
+                    populateDatabase(database.wordDao())
+                }
+            }
+        }
+
+        suspend fun populateDatabase(wordDao: WordDao) {
+            wordDao.deleteAll()
+
+            var word = Word("Hello")
+            wordDao.insert(word)
+            word = Word("Word!")
+            wordDao.insert(word)
         }
     }
 }
@@ -141,6 +162,8 @@ class WordListAdapter : ListAdapter<Word, WordListAdapter.WordViewHolder>(WordsC
 }
 
 class WordsApplication: Application() {
-    val database by lazy { WordRoomDatabase.getDatabase(this) }
+    val applicationScope =  CoroutineScope(SupervisorJob())
+
+    val database by lazy { WordRoomDatabase.getDatabase(this, applicationScope) }
     val repository by lazy { WordRepository(database.wordDao()) }
 }
